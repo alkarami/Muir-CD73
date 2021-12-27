@@ -144,7 +144,7 @@ NT5E_cells <- as.data.frame(cbind(as.numeric(NT5E_cells),
                                  as.character(org.int.clean$Organoid_Cluster),
                                  org.int.clean$Status,org.int.clean$orig.ident))
 colnames(NT5E_cells) <- c('CD73','CellType','Treatment','Sample')
-NT5E_cells$NT5E <- as.numeric(NT5E_cells$CD73)
+NT5E_cells$CD73 <- as.numeric(NT5E_cells$CD73)
 NT5E_cells$Treatment <- revalue(NT5E_cells$Treatment,
                                replace = c('Control' = 'NT'))
 NT5E_cells$Treatment <- factor(NT5E_cells$Treatment, 
