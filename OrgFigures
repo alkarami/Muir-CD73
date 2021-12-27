@@ -1,0 +1,163 @@
+library(Seurat)
+library(ggplot2)
+library(ggpubr)
+library(dplyr)
+library(plyr)
+library(reshape)
+
+## Load in data
+load('org.int.clean')
+
+## Fig 4A
+p <- DimPlot(org.int.clean, split.by = 'Status', group.by = 'Organoid_Cluster')
+ggsave('Classified_Clusters.pdf', plot = p)
+
+## Fig 4B
+Idents(org.int.clean) <- 'Status'
+markers <- c('MKI67','CD73','TP63','NGFR','IVL','KRT13','KRT4','FLG')
+org.wt <- subset(org.int.clean, idents = 'Control')
+rownames(org.wt@assays$RNA@data) <- revalue(rownames(org.int.clean@assays$RNA@data),
+                                            replace = c('NT5E' = 'CD73'))
+org.il13 <- subset(org.int.clean, idents = 'IL13')
+rownames(org.il13@assays$RNA@data) <- revalue(rownames(org.int.clean@assays$RNA@data),
+                                              replace = c('NT5E' = 'CD73'))
+org.wt$Organoid_Cluster <- factor(org.wt$Organoid_Cluster, levels = 
+                                    rev(levels(org.wt$Organoid_Cluster)))
+Idents(org.wt) <- 'Organoid_Cluster'
+p <- DotPlot(org.wt, features = markers, 
+             assay = 'RNA', cols = c('blue','red'), scale = F) + RotatedAxis()
+ggsave('Markers_NT_Named.pdf', plot = p)
+org.il13$Organoid_Cluster <- factor(org.il13$Organoid_Cluster, levels = 
+                                      rev(levels(org.il13$Organoid_Cluster)))
+Idents(org.il13) <- 'Organoid_Cluster'
+p <- DotPlot(org.il13, features = markers, 
+             assay = 'RNA', cols = c('blue','red'), scale = F) + RotatedAxis()
+ggsave('Markers_IL13_Named.pdf', plot = p)
+
+## Fig 4C
+heatmarkers <- read.csv('ClusterMarkers.csv')
+Idents(org.int.clean) <- 'Organoid_Cluster'
+heatmarkers <- heatmarkers[which(heatmarkers$p_val_adj<0.05),] %>% 
+  group_by(cluster) %>% top_n(n = 8, wt = avg_log2FC)
+org.int.clean <- ScaleData(org.int.clean, assay = 'RNA', 
+                           features = heatmarkers$gene)
+p <- DoHeatmap(object = org.int.clean, features = heatmarkers$gene, 
+               assay = 'RNA',label = F, draw.lines = F)
+ggsave('ClusterMarkers.pdf', plot = p)
+
+## Fig 4D
+cpt <- prop.table(table(org.int.clean$Organoid_Cluster, org.int.clean$orig.ident), margin = 2)
+cpt <- melt(cpt)
+cpt$Age <- c(rep('NT',16),rep('IL13',16))
+cpt$Age <- factor(cpt$Age, levels = c('NT','IL13'))
+colnames(cpt) <- c('Cluster','Sample','Proportion','Treatment')
+p <- ggboxplot(cpt, x = "Treatment", y = "Proportion",color = "Treatment",
+               add = 'jitter', palette = 'lancet', repel = T, 
+               ylim = c(0,0.7))+
+  stat_compare_means(label.y = 0.6, size = 3)+ 
+  facet_wrap(~Cluster)
+ggsave('ClusterProps_Grouped.pdf', plot = p)
+
+## Fig 4E
+# IVL
+IVL_cells <- GetAssayData(org.int.clean, slot = 'data', assay = 'RNA')
+IVL_cells <- IVL_cells['IVL',]
+IVL_cells <- as.data.frame(cbind(as.numeric(IVL_cells),
+                                 as.character(org.int.clean$Organoid_Cluster),
+                                 org.int.clean$Status,org.int.clean$orig.ident))
+colnames(IVL_cells) <- c('IVL','CellType','Treatment','Sample')
+IVL_cells$IVL <- as.numeric(IVL_cells$IVL)
+IVL_cells$Treatment <- revalue(IVL_cells$Treatment,
+                               replace = c('Control' = 'NT'))
+IVL_cells$Treatment <- factor(IVL_cells$Treatment, 
+                              levels = c('NT','IL13'))
+IVL_cells$CellType <- factor(IVL_cells$CellType, 
+                             levels = c("Basal-1",'Basal-2','Suprabasal',
+                                        'Superficial'))
+p <- ggboxplot(IVL_cells[IVL_cells$CellType %in% c('Suprabasal','Superficial'),], 'Treatment', 'IVL', 
+               fill = 'Treatment', ylim = c(0,5))+ 
+  stat_compare_means(label = 'p.signif')+
+  facet_wrap(~CellType)+
+  theme(legend.key.size = unit(0.5, 'cm'),
+        legend.text = element_text(size=7),
+        legend.position = 'right',
+        legend.title = element_text(size=9))
+ggsave('IVL_ClusterComp_Sample_Box_Grouped_FINAL_SUPS.pdf', plot = p)
+
+# FLG
+FLG_cells <- GetAssayData(org.int.clean, slot = 'data', assay = 'RNA')
+FLG_cells <- FLG_cells['FLG',]
+FLG_cells <- as.data.frame(cbind(as.numeric(FLG_cells),
+                                 as.character(org.int.clean$Organoid_Cluster),
+                                 org.int.clean$Status,org.int.clean$orig.ident))
+colnames(FLG_cells) <- c('FLG','CellType','Treatment','Sample')
+FLG_cells$FLG <- as.numeric(FLG_cells$FLG)
+FLG_cells$Treatment <- revalue(FLG_cells$Treatment,
+                               replace = c('Control' = 'NT'))
+FLG_cells$Treatment <- factor(FLG_cells$Treatment, 
+                              levels = c('NT','IL13'))
+FLG_cells$CellType <- factor(FLG_cells$CellType, 
+                             levels = c("Basal-1",'Basal-2','Suprabasal',
+                                        'Superficial'))
+p <- ggboxplot(FLG_cells[FLG_cells$CellType %in% c('Suprabasal','Superficial'),], 'Treatment', 'FLG', 
+               fill = 'Treatment', ylim = c(0,5))+ 
+  stat_compare_means(label = 'p.signif')+
+  facet_wrap(~CellType)+
+  theme(legend.key.size = unit(0.5, 'cm'),
+        legend.text = element_text(size=7),
+        legend.position = 'right',
+        legend.title = element_text(size=9))
+ggsave('FLG_ClusterComp_Sample_Box_Grouped_FINAL_SUPS.pdf', plot = p)
+
+## Fig 4F
+# SOX2
+SOX2_cells <- GetAssayData(org.int.clean, slot = 'data', assay = 'RNA')
+SOX2_cells <- SOX2_cells['SOX2',]
+SOX2_cells <- as.data.frame(cbind(as.numeric(SOX2_cells),
+                                  as.character(org.int.clean$Organoid_Cluster),
+                                  org.int.clean$Status,org.int.clean$orig.ident))
+colnames(SOX2_cells) <- c('SOX2','CellType','Treatment','Sample')
+SOX2_cells$SOX2 <- as.numeric(SOX2_cells$SOX2)
+SOX2_cells$Treatment <- revalue(SOX2_cells$Treatment,
+                                replace = c('Control' = 'NT'))
+SOX2_cells$Treatment <- factor(SOX2_cells$Treatment, 
+                               levels = c('NT','IL13'))
+SOX2_cells$CellType <- factor(SOX2_cells$CellType,
+                              levels = c("Basal-1",'Basal-2',
+                                         'Suprabasal','Superficial'))
+p <- ggboxplot(SOX2_cells[SOX2_cells$CellType %in% c('Basal-1','Basal-2'),],
+               'Treatment', 'SOX2', 
+               fill = 'Treatment', ylim = c(0,3))+ 
+  stat_compare_means(label = 'p.signif')+
+  facet_wrap(~CellType)+
+  theme(legend.key.size = unit(0.5, 'cm'),
+        legend.text = element_text(size=7),
+        legend.position = 'right',
+        legend.title = element_text(size=9))
+ggsave('SOX2_ClusterComp_Sample_Box_Grouped_FINAL_BASALS.pdf', plot = p)
+
+## Fig 4G
+# CD73
+NT5E_cells <- GetAssayData(org.int.clean, slot = 'data', assay = 'RNA')
+NT5E_cells <- NT5E_cells['NT5E',]
+NT5E_cells <- as.data.frame(cbind(as.numeric(NT5E_cells),
+                                 as.character(org.int.clean$Organoid_Cluster),
+                                 org.int.clean$Status,org.int.clean$orig.ident))
+colnames(NT5E_cells) <- c('CD73','CellType','Treatment','Sample')
+NT5E_cells$NT5E <- as.numeric(NT5E_cells$CD73)
+NT5E_cells$Treatment <- revalue(NT5E_cells$Treatment,
+                               replace = c('Control' = 'NT'))
+NT5E_cells$Treatment <- factor(NT5E_cells$Treatment, 
+                              levels = c('NT','IL13'))
+NT5E_cells$CellType <- factor(NT5E_cells$CellType, 
+                             levels = c("Basal-1",'Basal-2','Suprabasal',
+                                        'Superficial'))
+p <- ggboxplot(NT5E_cells,'Treatment', 'CD73',fill = 'Treatment', 
+               ylim = c(0,3))+ 
+  stat_compare_means(label = 'p.signif')+
+  facet_wrap(~CellType)+
+  theme(legend.key.size = unit(0.5, 'cm'),
+        legend.text = element_text(size=7),
+        legend.position = 'right',
+        legend.title = element_text(size=9))
+ggsave('CD73_ClusterComp_Sample_Box_Grouped_FINAL.pdf', plot = p)
